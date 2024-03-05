@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Payload</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #d9d9d9;
+        }
+
+        .frame {
+            border: 2px solid #000;
+            padding: 20px;
+            border-radius: 10px;
+            width: fit-content;
+            background-color: #fff;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        h3 {
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 10px;
+            max-height: 80%;
+            max-width: 30%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #modalTextEnglish {
+            color: #cbc5c5;
+        }
+
+        #modalTextEnglish::selection {
+            background-color: rgb(246, 246, 6);
+            color: #060404; 
+        }        
+
+        #modalTextArabic {
+            color: #006400; 
+        }        
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="frame">
+            <h3>Publish Messages untuk RabbitMQ with Universal Payload</h3>
+            <button id="sendButton1" class="btn btn-primary btn-lg d-block mb-2">Send Payload 1 (0)</button>
+            <button id="sendButton2" class="btn btn-primary btn-lg d-block mb-2">Send Payload 2 (0)</button>
+            <button id="sendButton3" class="btn btn-primary btn-lg d-block mb-2">Send Payload 3 (0)</button>
+            <button id="resetButton" class="btn btn-danger">Reset Counters</button>
+        </div>
+    </div>
+
+    <div id="myModal" class="modal">
+        <div class="modal-content" id="customModalContent">
+            <span class="close">&times;</span>
+            <p id="modalText">Ada data counter yang aktif. Jika perlu, Anda bisa reset menggunakan tombol yang tersedia.</p>
+            <p id="modalTextEnglish">There are active counter data. If necessary, you can reset using the available button.</p>
+            <p id="modalTextArabic">هناك بيانات عداد نشطة. إذا لزم الأمر، يمكنك إعادة تعيينها باستخدام الزر المتاح.</p>
+        </div>
+    </div>
+
+    <script>
+        async function sendPayload(payloadType) {
+            try {
+                let counter = localStorage.getItem(`counter_${payloadType}`) || 0;
+                counter++;
+                
+                const button = document.getElementById(`sendButton${payloadType}`);
+                button.textContent = `Send Payload ${payloadType} (${counter})`;
+                
+                localStorage.setItem(`counter_${payloadType}`, counter.toString());
+
+                // Fetch the payload from the backend
+                const response = await fetch('/get-payload', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ payloadType })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch payload from server.');
+                }
+
+                // Parse the response JSON
+                const responseData = await response.json();
+
+                // Check if the payload is an object or a string
+                let payload;
+                if (typeof responseData === 'object') {
+                    console.log("typeof responseData is OBJECT");
+                    payload = responseData;
+                } else if (typeof responseData === 'string') {
+                    console.log("typeof responseData is STRING");
+                    payload = responseData;
+                } else {
+                    throw new Error('Invalid payload type.');
+                }
+
+                // Publish the payload to RabbitMQ
+                const publishResponse = await fetch('/send-payload', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ payload })
+                });
+
+                if (publishResponse.ok) {
+                    console.log(`Payload ${payloadType} sent successfully.`);
+                } else {
+                    console.error(`Failed to send payload ${payloadType}.`);
+                }
+            } catch (error) {
+                console.error(`Error sending payload ${payloadType}:`, error);
+            }
+        }
+
+
+        async function showModal() {
+            try {
+                const modal = document.getElementById('myModal');
+                modal.style.display = 'block';
+
+                const closeButton = document.getElementsByClassName('close')[0];
+                closeButton.onclick = function () {
+                    modal.style.display = 'none';
+                }
+
+                window.onclick = function (event) {
+                    if (event.target == modal) {
+                        modal.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Error showing modal:', error);
+            }
+        }
+
+        function resetCounters() {
+            try {
+                localStorage.removeItem('counter_1');
+                localStorage.removeItem('counter_2');
+                localStorage.removeItem('counter_3');
+                location.reload();
+            } catch (error) {
+                console.error('Error resetting counters:', error);
+            }
+        }
+
+        document.getElementById('sendButton1').addEventListener('click', () => sendPayload(1));
+        document.getElementById('sendButton2').addEventListener('click', () => sendPayload(2));
+        document.getElementById('sendButton3').addEventListener('click', () => sendPayload(3));
+        document.getElementById('resetButton').addEventListener('click', resetCounters);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            for (let i = 1; i <= 3; i++) {
+                let counter = localStorage.getItem(`counter_${i}`) || 0;
+                const button = document.getElementById(`sendButton${i}`);
+                button.textContent = `Send Payload ${i} (${counter})`;
+            }
+
+            const counterKeys = Object.keys(localStorage);
+            if (counterKeys.some(key => key.startsWith('counter_'))) {
+                showModal();
+            }
+        });
+
+        function setModalSize() {
+            const modalContent = document.getElementById('customModalContent');
+            const minHeight = Math.max(document.documentElement.clientHeight * 0.8, 300); // Batasi minimal tinggi menjadi 300px atau 80% dari tinggi viewport
+            const minWidth = Math.max(document.documentElement.clientWidth * 0.3, 400); // Batasi minimal lebar menjadi 400px atau 30% dari lebar viewport
+
+            modalContent.style.minHeight = minHeight + 'px';
+            modalContent.style.minWidth = minWidth + 'px';
+        }
+
+        document.addEventListener('DOMContentLoaded', setModalSize);
+        window.addEventListener('resize', setModalSize);
+    </script>
+</body>
+</html>
